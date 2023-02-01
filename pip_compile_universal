@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from pathlib import Path
 import argparse
 import os
+import signal
 import subprocess
+import threading
+from pathlib import Path
 
 
 def parse_versions(versions):
@@ -42,23 +44,84 @@ def get_output_and_args(compile_args):
 	return output_filename, compile_args
 
 
+def check_proc_status(proc):
+	if proc.returncode:
+		raise subprocess.CalledProcessError(proc.returncode, ' '.join(proc.args))
+
+
 def ensure_venv_exists(version_name, virtualenvs_dir):
 	virtualenv_dir = virtualenvs_dir / f'py{version_name}'
 	if not virtualenv_dir.exists():
 		process_args = [f'python{version_name}', '-m', 'venv', str(virtualenv_dir)]
 		proc = subprocess.Popen(process_args, preexec_fn=os.setpgrp)
-		subprocess.call
 		proc.wait()
-		if proc.returncode:
-			raise subprocess.CalledProcessError(proc.returncode, ' '.join(process_args))
+		check_proc_status(proc)
+
+
+class PipCompile(threading.Thread):
+	def __init__(self, virtualenv_dir, compile_args):
+		super().__init__()
+		self.virtualenv_dir = virtualenv_dir
+		self.compile_args = compile_args
+		self.__stopping = False
+		self.__proc = None
+
+	@property
+	def python_binary(self):
+		return str(self.virtualenv_dir / 'bin' / 'python')
+
+	@property
+	def pip_binary(self):
+		return str(self.virtualenv_dir / 'bin' / 'pip')
+
+	def run(self):
+		if self.__stopping:
+			return
+		self.__proc = subprocess.Popen([self.pip_binary, 'install', '--upgrade', 'pip-tools'], preexec_fn=os.setpgrp)
+		self.__proc.communicate()
+		if self.__stopping:
+			return
+		check_proc_status(self.__proc)
+		self.__proc = None
+
+	def stop(self):
+		self.__stopping = True
+		proc = self.__proc
+		if proc is not None:
+			group = os.getpgid(proc.pid)
+			proc.terminate()
+			try:
+				proc.wait(0.1)
+			except:
+				proc.kill()
+			try:
+				os.killpg(group, signal.SIGKILL)
+			except Exception:
+				pass
 
 
 def pip_compile(versions, compile_args, virtualenvs_dir):
+	processes = []
+
 	output_filename, compile_args = get_output_and_args(compile_args)
 	for version in versions:
 		version_name = ".".join(str(v) for v in version)
 		virtualenv_dir = virtualenvs_dir / f'py{version_name}'
 		ensure_venv_exists(version_name, virtualenvs_dir)
+		compile_proc = PipCompile(virtualenv_dir, compile_args)
+		compile_proc.start()
+		processes.append(compile_proc)
+
+	def at_exit(*args):
+		for proc in processes:
+			proc.stop()
+
+	signal.signal(signal.SIGTERM, at_exit)
+	signal.signal(signal.SIGINT, at_exit)
+	signal.signal(signal.SIGHUP, at_exit)
+
+	for proc in processes:
+		proc.join()
 
 	print(output_filename, compile_args)
 
