@@ -63,6 +63,7 @@ class PipCompile(threading.Thread):
 		super().__init__()
 		self.virtualenv_dir = virtualenv_dir
 		self.compile_args = compile_args
+		self.requirements = ''
 		self.__stopping = False
 		self.__proc = None
 
@@ -74,6 +75,10 @@ class PipCompile(threading.Thread):
 	def pip_binary(self):
 		return str(self.virtualenv_dir / 'bin' / 'pip')
 
+	@property
+	def pip_compile_binary(self):
+		return str(self.virtualenv_dir / 'bin' / 'pip-compile')
+
 	def run(self):
 		if self.__stopping:
 			return
@@ -82,6 +87,17 @@ class PipCompile(threading.Thread):
 		if self.__stopping:
 			return
 		check_proc_status(self.__proc)
+		self.__proc = None
+
+		if self.__stopping:
+			return
+		self.__proc = subprocess.Popen([self.pip_compile_binary] + self.compile_args, stdout=subprocess.PIPE, preexec_fn=os.setpgrp)
+		stdout, __ = self.__proc.communicate()
+		if self.__stopping:
+			return
+		check_proc_status(self.__proc)
+		if stdout:
+			self.requirements = stdout.decode('utf-8')
 		self.__proc = None
 
 	def stop(self):
@@ -120,10 +136,11 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 	signal.signal(signal.SIGINT, at_exit)
 	signal.signal(signal.SIGHUP, at_exit)
 
-	for proc in processes:
+	for proc, version in zip(processes, versions):
 		proc.join()
-
-	print(output_filename, compile_args)
+		version_name = ".".join(str(v) for v in version)
+		with open(f'py{version_name}', 'w') as fp:
+			fp.write(proc.requirements)
 
 
 def main():
