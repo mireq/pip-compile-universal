@@ -151,11 +151,48 @@ def split_requirements_and_comments(requirements_txt: str) -> List[Tuple[str, st
 	return requirements_list
 
 
+def versions_to_constraints(versions, all_versions):
+	indexes = [all_versions.index(v) for v in versions]
+
+	ranges = []
+
+	range_start = indexes[0]
+	range_end = indexes[0]
+
+	for index in indexes:
+		if index - range_end > 1:
+			ranges.append((range_start, range_end))
+			range_start = index
+			range_end = index
+		else:
+			range_end = index
+
+	ranges.append((range_start, range_end))
+
+	constraints = []
+
+	for range_start, range_end in ranges:
+		constraint = []
+		if range_start != 0:
+			constraint.append(f'python_version >= "{all_versions[range_start]}"')
+		if range_end != len(all_versions) - 1:
+			constraint.append(f'python_version < "{all_versions[range_end + 1]}"')
+		constraints.append(' AND '.join(constraint))
+
+	constraints = [c for c in constraints if c]
+
+	if len(constraints) > 1:
+		constraints = [f'({c})' for c in constraints if c]
+
+	return ' OR '.join(constraints)
+
+
 def pip_compile(versions, compile_args, virtualenvs_dir):
 	processes = []
 	version_names = [".".join(str(v) for v in version) for version in versions]
 
-	#output_filename, compile_args = get_output_and_args(compile_args)
+	output_filename, compile_args = get_output_and_args(compile_args)
+
 	#for version in versions:
 	#	version_name = ".".join(str(v) for v in version)
 	#	virtualenv_dir = virtualenvs_dir / f'py{version_name}'
@@ -191,6 +228,7 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 		for req, comment in version_requirements:
 			try:
 				req, constraints = req.split(';', 1)
+				constraints = constraints.strip()
 			except ValueError:
 				constraints = ''
 			req = req.strip()
@@ -198,7 +236,18 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 			version_specs[req]['versions'].append(version_name)
 			version_specs[req]['comment'] = comment
 
-	print(version_specs)
+	with open(output_filename, 'w') as fp:
+		for spec, item in version_specs.items():
+			fp.write(spec)
+			constraints = versions_to_constraints(item['versions'], version_names)
+			if item['constraints'] and item['constraints'] != constraints:
+				if constraints:
+					constraints = f'({item["constraints"]}) AND ({constraints})'
+				else:
+					constraints = item["constraints"]
+			if constraints:
+				fp.write(f' ; {constraints}')
+			fp.write(item['comment'])
 
 
 def main():
