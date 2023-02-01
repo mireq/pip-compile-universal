@@ -7,6 +7,7 @@ import subprocess
 import threading
 import re
 import sys
+from collections import defaultdict
 from pathlib import Path
 from typing import List, Tuple
 
@@ -139,9 +140,9 @@ def split_requirements_and_comments(requirements_txt: str) -> List[Tuple[str, st
 			if comment_pos is not None:
 				comment_pos = comment_pos.start(0)
 			if comment_pos is None:
-				current_requirement = line
+				current_requirement = line.strip()
 			else:
-				current_comment = line[comment_pos:]
+				current_comment = line[comment_pos:].strip()
 				current_requirement = line[:comment_pos]
 
 	if current_requirement:
@@ -152,6 +153,7 @@ def split_requirements_and_comments(requirements_txt: str) -> List[Tuple[str, st
 
 def pip_compile(versions, compile_args, virtualenvs_dir):
 	processes = []
+	version_names = [".".join(str(v) for v in version) for version in versions]
 
 	#output_filename, compile_args = get_output_and_args(compile_args)
 	#for version in versions:
@@ -182,11 +184,21 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 		with open(f'py{version_name}', 'r') as fp:
 			requirements.append(fp.read())
 
-	for version_requirements in requirements:
+	version_specs = defaultdict(lambda: {'versions': [], 'constraints': '', 'comment': ''})
+
+	for version_name, version_requirements in zip(version_names, requirements):
 		version_requirements = split_requirements_and_comments(version_requirements)
 		for req, comment in version_requirements:
-			sys.stdout.write(req)
-			sys.stdout.write(comment)
+			try:
+				req, constraints = req.split(';', 1)
+			except ValueError:
+				constraints = ''
+			req = req.strip()
+			version_specs[req]['constraints'] = constraints
+			version_specs[req]['versions'].append(version_name)
+			version_specs[req]['comment'] = comment
+
+	print(version_specs)
 
 
 def main():
