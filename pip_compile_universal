@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import argparse
+import atexit
 import os
 import re
 import signal
@@ -114,16 +115,20 @@ class PipCompile(threading.Thread):
 		self.__stopping = True
 		proc = self.__proc
 		if proc is not None:
-			group = os.getpgid(proc.pid)
+			try:
+				group = os.getpgid(proc.pid)
+			except Exception:
+				group = None
 			proc.terminate()
 			try:
 				proc.wait(0.1)
 			except:
 				proc.kill()
-			try:
-				os.killpg(group, signal.SIGKILL)
-			except Exception:
-				pass
+			if group is not None:
+				try:
+					os.killpg(group, signal.SIGKILL)
+				except Exception:
+					pass
 
 def split_requirements_and_comments(requirements_txt: str) -> List[Tuple[str, str]]:
 	"""
@@ -234,6 +239,7 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 		for proc in processes:
 			proc.stop()
 
+	atexit.register(at_exit)
 	signal.signal(signal.SIGTERM, at_exit)
 	signal.signal(signal.SIGINT, at_exit)
 	signal.signal(signal.SIGHUP, at_exit)
