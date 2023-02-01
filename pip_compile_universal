@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 import argparse
 import os
+import re
 import signal
 import subprocess
+import tempfile
 import threading
-import re
-import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import List, Tuple
@@ -37,20 +37,20 @@ def get_output_and_args(compile_args):
 	if out_arg_idx:
 		if out_arg_idx < len(compile_args) - 1:
 			output_filename = compile_args[out_arg_idx + 1]
-			compile_args[out_arg_idx + 1] = '-'
+			compile_args[out_arg_idx + 1] = '__OUTPUT__'
 		else:
 			compile_args.pop()
 			out_arg_idx = None
 
 	if out_arg_idx is None:
-		compile_args.extend(['-o', '-'])
+		compile_args.extend(['-o', '__OUTPUT__'])
 
 	return output_filename, compile_args
 
 
 def check_proc_status(proc):
 	if proc.returncode:
-		raise subprocess.CalledProcessError(proc.returncode, ' '.join(proc.args))
+		raise subprocess.CalledProcessError(proc.returncode, ' '.join(str(a) for a in proc.args))
 
 
 def ensure_venv_exists(version_name, virtualenvs_dir):
@@ -63,11 +63,14 @@ def ensure_venv_exists(version_name, virtualenvs_dir):
 
 
 class PipCompile(threading.Thread):
-	def __init__(self, virtualenv_dir, compile_args):
+	def __init__(self, virtualenv_dir, compile_args, output_path):
 		super().__init__()
+		compile_args = [output_path if arg == '__OUTPUT__' else arg for arg in compile_args]
 		self.virtualenv_dir = virtualenv_dir
 		self.compile_args = compile_args
 		self.requirements = ''
+		self.output_path = output_path
+		self.exc = None
 		self.__stopping = False
 		self.__proc = None
 
@@ -84,25 +87,28 @@ class PipCompile(threading.Thread):
 		return str(self.virtualenv_dir / 'bin' / 'pip-compile')
 
 	def run(self):
-		if self.__stopping:
-			return
-		self.__proc = subprocess.Popen([self.pip_binary, 'install', '--upgrade', 'pip-tools'], preexec_fn=os.setpgrp)
-		self.__proc.communicate()
-		if self.__stopping:
-			return
-		check_proc_status(self.__proc)
-		self.__proc = None
+		try:
+			if self.__stopping:
+				return
+			self.__proc = subprocess.Popen([self.pip_binary, 'install', '--upgrade', 'pip-tools'], preexec_fn=os.setpgrp)
+			self.__proc.communicate()
+			if self.__stopping:
+				return
+			check_proc_status(self.__proc)
+			self.__proc = None
 
-		if self.__stopping:
-			return
-		self.__proc = subprocess.Popen([self.pip_compile_binary] + self.compile_args, stdout=subprocess.PIPE, preexec_fn=os.setpgrp)
-		stdout, __ = self.__proc.communicate()
-		if self.__stopping:
-			return
-		check_proc_status(self.__proc)
-		if stdout:
-			self.requirements = stdout.decode('utf-8')
-		self.__proc = None
+			if self.__stopping:
+				return
+			self.__proc = subprocess.Popen([self.pip_compile_binary] + self.compile_args, preexec_fn=os.setpgrp)
+			__, __ = self.__proc.communicate()
+			if self.__stopping:
+				return
+			check_proc_status(self.__proc)
+			with self.output_path.open('r') as fp:
+				self.requirements = fp.read()
+			self.__proc = None
+		except BaseException as e:
+			self.exc = e
 
 	def stop(self):
 		self.__stopping = True
@@ -193,33 +199,49 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 
 	output_filename, compile_args = get_output_and_args(compile_args)
 
-	#for version in versions:
-	#	version_name = ".".join(str(v) for v in version)
-	#	virtualenv_dir = virtualenvs_dir / f'py{version_name}'
-	#	ensure_venv_exists(version_name, virtualenvs_dir)
-	#	compile_proc = PipCompile(virtualenv_dir, compile_args)
-	#	compile_proc.start()
-	#	processes.append(compile_proc)
+	tmp_dir = tempfile.TemporaryDirectory()
+	tmp_dir_path = Path(tmp_dir.name)
 
-	#def at_exit(*args):
-	#	for proc in processes:
-	#		proc.stop()
+	first_input = compile_args[0]
+	first_input.seek(0)
+	first_input_data = first_input.read()
+	compile_args[0] = Path(first_input.name)
+	first_input.close()
 
-	#signal.signal(signal.SIGTERM, at_exit)
-	#signal.signal(signal.SIGINT, at_exit)
-	#signal.signal(signal.SIGHUP, at_exit)
+	with open(output_filename, 'a+') as fp:
+		fp.seek(0)
+		current_saved_requirements = fp.read()
 
-	#requirements = []
-	#for proc, version in zip(processes, versions):
-	#	proc.join()
-	#	version_name = ".".join(str(v) for v in version)
-	#	requirements.append(proc.requirements)
+	for version_name in version_names:
+		version_compile_args = compile_args[:] # copy
+		version_compile_args[0] = tmp_dir_path /  f'py{version_name}.in'
+		with (tmp_dir_path / f'py{version_name}.in').open('w') as fp:
+			fp.write(first_input_data)
+		output_path = tmp_dir_path / f'py{version_name}.txt'
+		with output_path.open('w') as fp:
+			fp.write(current_saved_requirements)
+
+		virtualenv_dir = virtualenvs_dir / f'py{version_name}'
+		ensure_venv_exists(version_name, virtualenvs_dir)
+		compile_proc = PipCompile(virtualenv_dir, version_compile_args, output_path)
+		compile_proc.start()
+		processes.append(compile_proc)
+
+	def at_exit(*args):
+		for proc in processes:
+			proc.stop()
+
+	signal.signal(signal.SIGTERM, at_exit)
+	signal.signal(signal.SIGINT, at_exit)
+	signal.signal(signal.SIGHUP, at_exit)
 
 	requirements = []
-	for version in versions:
+	for proc, version in zip(processes, versions):
+		proc.join()
 		version_name = ".".join(str(v) for v in version)
-		with open(f'py{version_name}', 'r') as fp:
-			requirements.append(fp.read())
+		requirements.append(proc.requirements)
+		if proc.exc:
+			raise proc.exc
 
 	version_specs = defaultdict(lambda: {'versions': [], 'markers': '', 'comment': ''})
 
@@ -254,9 +276,11 @@ def main():
 	parser = argparse.ArgumentParser(description="Compile requirements.in to single requirements.txt file with multiple python versions support")
 	parser.add_argument('versions', type=parse_versions, help="Comma separated list of pythoon versions")
 	parser.add_argument('--virtualenvs_dir', default=str(Path.home() / '.virtualenvs'), help="Where to create virtualenvs")
+	parser.add_argument('input', type=argparse.FileType(mode='r'), help="First input file")
 	parser.add_argument('pip_compile_args', nargs=argparse.REMAINDER, help="Arguments forwarded to pip-tools")
 	args = parser.parse_args()
-	pip_compile(args.versions, args.pip_compile_args, Path(args.virtualenvs_dir))
+	compile_args = [args.input] + args.pip_compile_args
+	pip_compile(args.versions, compile_args, Path(args.virtualenvs_dir))
 
 
 if __name__ == "__main__":
