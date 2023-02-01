@@ -151,7 +151,7 @@ def split_requirements_and_comments(requirements_txt: str) -> List[Tuple[str, st
 	return requirements_list
 
 
-def versions_to_constraints(versions, all_versions):
+def versions_to_markers(versions, all_versions):
 	indexes = [all_versions.index(v) for v in versions]
 
 	ranges = []
@@ -169,22 +169,22 @@ def versions_to_constraints(versions, all_versions):
 
 	ranges.append((range_start, range_end))
 
-	constraints = []
+	markers = []
 
 	for range_start, range_end in ranges:
-		constraint = []
+		marker = []
 		if range_start != 0:
-			constraint.append(f'python_version >= "{all_versions[range_start]}"')
+			marker.append(f'python_version >= "{all_versions[range_start]}"')
 		if range_end != len(all_versions) - 1:
-			constraint.append(f'python_version < "{all_versions[range_end + 1]}"')
-		constraints.append(' AND '.join(constraint))
+			marker.append(f'python_version < "{all_versions[range_end + 1]}"')
+		markers.append(' AND '.join(marker))
 
-	constraints = [c for c in constraints if c]
+	markers = [c for c in markers if c]
 
-	if len(constraints) > 1:
-		constraints = [f'({c})' for c in constraints if c]
+	if len(markers) > 1:
+		markers = [f'({c})' for c in markers if c]
 
-	return ' OR '.join(constraints)
+	return ' OR '.join(markers)
 
 
 def pip_compile(versions, compile_args, virtualenvs_dir):
@@ -221,32 +221,32 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 		with open(f'py{version_name}', 'r') as fp:
 			requirements.append(fp.read())
 
-	version_specs = defaultdict(lambda: {'versions': [], 'constraints': '', 'comment': ''})
+	version_specs = defaultdict(lambda: {'versions': [], 'markers': '', 'comment': ''})
 
 	for version_name, version_requirements in zip(version_names, requirements):
 		version_requirements = split_requirements_and_comments(version_requirements)
 		for req, comment in version_requirements:
 			try:
-				req, constraints = req.split(';', 1)
-				constraints = constraints.strip()
+				req, markers = req.split(';', 1)
+				markers = markers.strip()
 			except ValueError:
-				constraints = ''
+				markers = ''
 			req = req.strip()
-			version_specs[req]['constraints'] = constraints
+			version_specs[req]['markers'] = markers
 			version_specs[req]['versions'].append(version_name)
 			version_specs[req]['comment'] = comment
 
 	with open(output_filename, 'w') as fp:
 		for spec, item in version_specs.items():
 			fp.write(spec)
-			constraints = versions_to_constraints(item['versions'], version_names)
-			if item['constraints'] and item['constraints'] != constraints:
-				if constraints:
-					constraints = f'({item["constraints"]}) AND ({constraints})'
+			markers = versions_to_markers(item['versions'], version_names)
+			if item['markers'] and item['markers'] != markers:
+				if markers:
+					markers = f'({item["markers"]}) AND ({markers})'
 				else:
-					constraints = item["constraints"]
-			if constraints:
-				fp.write(f' ; {constraints}')
+					markers = item["markers"]
+			if markers:
+				fp.write(f' ; {markers}')
 			fp.write(item['comment'])
 
 
