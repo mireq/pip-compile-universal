@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import argparse
-import sys
+import os
 
 
 def parse_versions(versions):
@@ -17,11 +17,40 @@ def parse_versions(versions):
 	return sorted(parsed_versions)
 
 
+def get_output_and_args(compile_args):
+	compile_args = compile_args[:]
+	output_filename = 'requirements.txt'
+
+	out_arg_idx = None
+	try:
+		out_arg_idx = compile_args.index('-o')
+	except ValueError:
+		pass
+	if out_arg_idx:
+		if out_arg_idx < len(compile_args) - 1:
+			output_filename = compile_args[out_arg_idx + 1]
+			compile_args[out_arg_idx + 1] = '-'
+		else:
+			compile_args.pop()
+			out_arg_idx = None
+
+	if out_arg_idx is None:
+		compile_args.extend(['-o', '-'])
+
+	return output_filename, compile_args
+
+
+def pip_compile(version, compile_args):
+	output_filename, compile_args = get_output_and_args(compile_args)
+	print(output_filename, compile_args)
+
+
 def main():
 	parser = argparse.ArgumentParser(description="Compile requirements.in to single requirements.txt file with multiple python versions support")
 	parser.add_argument('versions', type=parse_versions, help="Comma separated list of pythoon versions")
+	parser.add_argument('pip_compile_args', nargs=argparse.REMAINDER, help="Arguments forwarded to pip-tools")
 	args = parser.parse_args()
-	print(args)
+	pip_compile(args.versions, args.pip_compile_args)
 
 
 if __name__ == "__main__":
