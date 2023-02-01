@@ -148,7 +148,7 @@ def split_requirements_and_comments(requirements_txt: str) -> List[Tuple[str, st
 			if comment_pos is None:
 				current_requirement = line.strip()
 			else:
-				current_comment = line[comment_pos:].strip()
+				current_comment = line[comment_pos:]
 				current_requirement = line[:comment_pos]
 
 	if current_requirement:
@@ -195,6 +195,7 @@ def versions_to_markers(versions, all_versions):
 
 def pip_compile(versions, compile_args, virtualenvs_dir):
 	processes = []
+	first_inputs = []
 	version_names = [".".join(str(v) for v in version) for version in versions]
 
 	output_filename, compile_args = get_output_and_args(compile_args)
@@ -206,6 +207,7 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 	first_input.seek(0)
 	first_input_data = first_input.read()
 	compile_args[0] = Path(first_input.name)
+	first_input_replacement = first_input.name
 	first_input.close()
 
 	with open(output_filename, 'a+') as fp:
@@ -215,6 +217,7 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 	for version_name in version_names:
 		version_compile_args = compile_args[:] # copy
 		version_compile_args[0] = tmp_dir_path /  f'py{version_name}.in'
+		first_inputs.append(str(version_compile_args[0]))
 		with (tmp_dir_path / f'py{version_name}.in').open('w') as fp:
 			fp.write(first_input_data)
 		output_path = tmp_dir_path / f'py{version_name}.txt'
@@ -245,7 +248,7 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 
 	version_specs = defaultdict(lambda: {'versions': [], 'markers': '', 'comment': ''})
 
-	for version_name, version_requirements in zip(version_names, requirements):
+	for version_name, first_tmp_input, version_requirements in zip(version_names, first_inputs, requirements):
 		version_requirements = split_requirements_and_comments(version_requirements)
 		for req, comment in version_requirements:
 			try:
@@ -256,7 +259,7 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 			req = req.strip()
 			version_specs[req]['markers'] = markers
 			version_specs[req]['versions'].append(version_name)
-			version_specs[req]['comment'] = comment
+			version_specs[req]['comment'] = comment.replace(first_tmp_input, first_input_replacement)
 
 	with open(output_filename, 'w') as fp:
 		for spec, item in version_specs.items():
