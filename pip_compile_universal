@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import argparse
+import sys
+
+
+def parse_versions(versions):
+	if not versions:
+		raise argparse.ArgumentTypeError("Missing versions attribute")
+	parsed_versions = []
+	versions = versions.split(',')
+	for version in versions:
+		try:
+			parsed_versions.append(tuple(int(num) for num in version.split('.')))
+		except ValueError:
+			raise argparse.ArgumentTypeError("Bad version format: %s" % version)
+	return sorted(parsed_versions)
+
+
+def main():
+	parser = argparse.ArgumentParser(description="Compile requirements.in to single requirements.txt file with multiple python versions support")
+	parser.add_argument('versions', type=parse_versions, help="Comma separated list of pythoon versions")
+	args = parser.parse_args()
+	print(args)
+
+
+if __name__ == "__main__":
+	main()
