@@ -5,7 +5,10 @@ import os
 import signal
 import subprocess
 import threading
+import re
+import sys
 from pathlib import Path
+from typing import List, Tuple
 
 
 def parse_versions(versions):
@@ -115,32 +118,75 @@ class PipCompile(threading.Thread):
 			except Exception:
 				pass
 
+def split_requirements_and_comments(requirements_txt: str) -> List[Tuple[str, str]]:
+	"""
+	Returns pairs of requirement and comment
+	"""
+	lines = requirements_txt.splitlines()
+	current_comment = ''
+	current_requirement = ''
+	requirements_list = []
+	for line in lines:
+		current_comment += '\n'
+		if line.strip()[:1] == '#':
+			current_comment += line
+		else:
+			if current_requirement:
+				requirements_list.append((current_requirement, current_comment))
+			current_requirement = ''
+			current_comment = ''
+			comment_pos = re.search(r'\s*#', line)
+			if comment_pos is not None:
+				comment_pos = comment_pos.start(0)
+			if comment_pos is None:
+				current_requirement = line
+			else:
+				current_comment = line[comment_pos:]
+				current_requirement = line[:comment_pos]
+
+	if current_requirement:
+		requirements_list.append((current_requirement, current_comment))
+
+	return requirements_list
+
 
 def pip_compile(versions, compile_args, virtualenvs_dir):
 	processes = []
 
-	output_filename, compile_args = get_output_and_args(compile_args)
+	#output_filename, compile_args = get_output_and_args(compile_args)
+	#for version in versions:
+	#	version_name = ".".join(str(v) for v in version)
+	#	virtualenv_dir = virtualenvs_dir / f'py{version_name}'
+	#	ensure_venv_exists(version_name, virtualenvs_dir)
+	#	compile_proc = PipCompile(virtualenv_dir, compile_args)
+	#	compile_proc.start()
+	#	processes.append(compile_proc)
+
+	#def at_exit(*args):
+	#	for proc in processes:
+	#		proc.stop()
+
+	#signal.signal(signal.SIGTERM, at_exit)
+	#signal.signal(signal.SIGINT, at_exit)
+	#signal.signal(signal.SIGHUP, at_exit)
+
+	#requirements = []
+	#for proc, version in zip(processes, versions):
+	#	proc.join()
+	#	version_name = ".".join(str(v) for v in version)
+	#	requirements.append(proc.requirements)
+
+	requirements = []
 	for version in versions:
 		version_name = ".".join(str(v) for v in version)
-		virtualenv_dir = virtualenvs_dir / f'py{version_name}'
-		ensure_venv_exists(version_name, virtualenvs_dir)
-		compile_proc = PipCompile(virtualenv_dir, compile_args)
-		compile_proc.start()
-		processes.append(compile_proc)
+		with open(f'py{version_name}', 'r') as fp:
+			requirements.append(fp.read())
 
-	def at_exit(*args):
-		for proc in processes:
-			proc.stop()
-
-	signal.signal(signal.SIGTERM, at_exit)
-	signal.signal(signal.SIGINT, at_exit)
-	signal.signal(signal.SIGHUP, at_exit)
-
-	for proc, version in zip(processes, versions):
-		proc.join()
-		version_name = ".".join(str(v) for v in version)
-		with open(f'py{version_name}', 'w') as fp:
-			fp.write(proc.requirements)
+	for version_requirements in requirements:
+		version_requirements = split_requirements_and_comments(version_requirements)
+		for req, comment in version_requirements:
+			sys.stdout.write(req)
+			sys.stdout.write(comment)
 
 
 def main():
