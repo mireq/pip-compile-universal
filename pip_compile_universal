@@ -177,14 +177,14 @@ def versions_to_markers(versions, all_versions):
 			marker.append(f'python_version >= "{all_versions[range_start]}"')
 		if range_end != len(all_versions) - 1:
 			marker.append(f'python_version < "{all_versions[range_end + 1]}"')
-		markers.append(' AND '.join(marker))
+		markers.append(' and '.join(marker))
 
 	markers = [c for c in markers if c]
 
 	if len(markers) > 1:
 		markers = [f'({c})' for c in markers if c]
 
-	return ' OR '.join(markers)
+	return ' or '.join(markers)
 
 
 def pip_compile(versions, compile_args, virtualenvs_dir):
@@ -242,7 +242,7 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 			markers = versions_to_markers(item['versions'], version_names)
 			if item['markers'] and item['markers'] != markers:
 				if markers:
-					markers = f'({item["markers"]}) AND ({markers})'
+					markers = f'({item["markers"]}) and ({markers})'
 				else:
 					markers = item["markers"]
 			if markers:
