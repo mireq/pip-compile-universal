@@ -1,0 +1,35 @@
+[project]
+name = "pip_compile_universal"
+description = "Compile requirements.in using pip-tools for multiple python versions"
+readme = "README.rst"
+requires-python = ">=3.7"
+keywords = ["pip-tools"]
+license = {text = "MIT"}
+dynamic = ["version"]
+authors = [
+	{ name = "Miroslav Bendík", email = "miroslav.bendik@gmail.com" }
+]
+classifiers = [
+	"Programming Language :: Python :: 3",
+]
+dependencies = ["pip-tools"]
+
+[project.urls]
+homepage = "https://github.com/mireq/pip-compile-universal"
+documentation = "https://github.com/mireq/pip-compile-universal"
+repository = "https://github.com/mireq/pip-compile-universal"
+changelog = "https://github.com/mireq/pip-compile-universal/blob/master/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+	"pylint",
+	"pre-commit",
+	"bump2version",
+	"commitizen"
+]
+
+[build-system]
+requires = ["setuptools", "setuptools-scm", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
