@@ -36,7 +36,7 @@ Example
 
 ``requirements.in``:
 
-..
+.. code::
 
 	workalendar
 
@@ -47,7 +47,7 @@ Example
 
 ``requirements.txt``:
 
-..
+.. code::
 
 	backports-zoneinfo==0.2.1 ; python_version < "3.9"
 	    # via workalendar
