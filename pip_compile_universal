@@ -29,7 +29,7 @@ def parse_versions(versions):
 
 def get_output_and_args(compile_args):
 	compile_args = compile_args[:]
-	output_filename = 'requirements.txt'
+	output_filename = os.path.splitext(compile_args[0].name)[0] + '.txt'
 
 	out_arg_idx = None
 	try:
