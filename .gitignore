@@ -1,0 +1,6 @@
+*.pyc
+*.mo
+__pycache__
+/dist
+/build
+/pip_compile_universal.egg-info/
