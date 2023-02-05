@@ -1,4 +1,4 @@
-## v0.0.1 (2023-02-05)
+## 0.0.1 (2023-02-05)
 
 ### Feat
 
@@ -18,6 +18,8 @@
 
 ### Fix
 
+- Reset version
+- Missing scm settings
 - Modified regex to process not annotated files
 - Guess oputput filename from input
 - Dont't try kill finished process
