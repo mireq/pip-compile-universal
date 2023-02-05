@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import threading
 from collections import defaultdict
+from itertools import zip_longest
 from pathlib import Path
 from typing import List, Tuple
 
@@ -130,36 +131,15 @@ class PipCompile(threading.Thread):
 				except Exception:
 					pass
 
+
 def split_requirements_and_comments(requirements_txt: str) -> List[Tuple[str, str]]:
-	"""
-	Returns pairs of requirement and comment
-	"""
-	lines = requirements_txt.splitlines()
-	current_comment = ''
-	current_requirement = ''
-	requirements_list = []
-	for line in lines:
-		current_comment += '\n'
-		if line.strip()[:1] == '#':
-			current_comment += line
-		else:
-			if current_requirement:
-				requirements_list.append((current_requirement, current_comment))
-			current_requirement = ''
-			current_comment = ''
-			comment_pos = re.search(r'\s*#', line)
-			if comment_pos is not None:
-				comment_pos = comment_pos.start(0)
-			if comment_pos is None:
-				current_requirement = line.strip()
-			else:
-				current_comment = line[comment_pos:]
-				current_requirement = line[:comment_pos]
-
-	if current_requirement:
-		requirements_list.append((current_requirement, current_comment))
-
-	return requirements_list
+	data = re.split(r'((?:\s*#[^\n]*\n?\s*)+)', requirements_txt, flags=re.MULTILINE)
+	return [
+		(requirement.strip(), comment)
+		for requirement, comment
+		in zip_longest(data[0::2], data[1::2], fillvalue='')
+		if requirement.strip()
+	]
 
 
 def versions_to_markers(versions, all_versions):
