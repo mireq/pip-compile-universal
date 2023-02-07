@@ -133,11 +133,11 @@ class PipCompile(threading.Thread):
 
 
 def split_requirements_and_comments(requirements_txt: str) -> List[Tuple[str, str]]:
-	data = re.split(r'((?:(?:\s*#[^\n]*)?\s+)+)', requirements_txt, flags=re.MULTILINE)
+	data = re.split(r'^((?:[ \t]*[^ \t\n#]+)+)', requirements_txt, flags=re.MULTILINE)
 	return [
 		(requirement.strip(), comment)
 		for requirement, comment
-		in zip_longest(data[0::2], data[1::2], fillvalue='')
+		in zip_longest(data[1::2], data[2::2], fillvalue='')
 		if requirement.strip()
 	]
 
