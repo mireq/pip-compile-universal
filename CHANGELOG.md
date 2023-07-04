@@ -1,3 +1,9 @@
+## 0.0.3 (2023-07-04)
+
+### Feat
+
+- Interpret markers inside temporary requirements files
+
 ## 0.0.2 (2023-02-07)
 
 ### Fix
