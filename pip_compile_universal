@@ -661,6 +661,29 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 		fp.seek(0)
 		current_saved_requirements = fp.read()
 
+	dependency_number = 0
+	dependency_pattern = '_dep_%d%s'
+	def copy_dependencies(file_contents):
+		nonlocal dependency_number
+		lines = file_contents.splitlines()
+		for line_number, line in enumerate(lines):
+			line = line.strip()
+			if line.startswith('-c ') or line.startswith('-r '):
+				cmd = line[:2]
+				filename = line[3:]
+				with open(filename) as fp:
+					dependency_contents = fp.read()
+				__, file_extension = os.path.splitext(filename)
+				dependency_contents = copy_dependencies(dependency_contents)
+				dependency_filename = tmp_dir_path / (dependency_pattern % (dependency_number, file_extension))
+				dependency_number += 1
+				with dependency_filename.open('w') as fp:
+					fp.write(dependency_contents)
+				lines[line_number] = f'{cmd} {dependency_filename}'
+		return '\n'.join(lines)
+
+	first_input_data = copy_dependencies(first_input_data)
+
 	for version_name in version_names:
 		version_compile_args = compile_args[:] # copy
 		version_compile_args[0] = tmp_dir_path /  f'py{version_name}.in'
