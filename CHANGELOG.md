@@ -1,3 +1,10 @@
+## 0.0.4 (2024-06-23)
+
+### Feat
+
+- Replace dependency names in comments
+- Copy dependencies to temporary directory
+
 ## 0.0.3 (2023-07-04)
 
 ### Feat
