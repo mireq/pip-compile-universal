@@ -1,3 +1,9 @@
+## 0.0.5 (2024-06-24)
+
+### Fix
+
+- Strip comments from included files
+
 ## 0.0.4 (2024-06-23)
 
 ### Feat
