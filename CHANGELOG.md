@@ -1,3 +1,9 @@
+## 0.0.6 (2024-06-25)
+
+### Fix
+
+- Correctly handle out of workign directory dependencies
+
 ## 0.0.5 (2024-06-24)
 
 ### Fix
