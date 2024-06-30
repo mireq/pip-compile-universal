@@ -679,7 +679,11 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 				__, file_extension = os.path.splitext(filename)
 				dependency_contents = copy_dependencies(dependency_contents, base_dir.joinpath(filename).parent)
 				dependency_filename = dependency_pattern % (dependency_number, file_extension)
-				dependency_replacements[str(tmp_dir_path / dependency_filename)] = filename
+
+				input_path = base_dir.joinpath(filename).resolve()
+				relative_filename = os.path.relpath(input_path, start=os.getcwd())
+
+				dependency_replacements[str(tmp_dir_path / dependency_filename)] = relative_filename
 				dependency_number += 1
 				with (tmp_dir_path / dependency_filename).open('w') as fp:
 					fp.write(dependency_contents)
