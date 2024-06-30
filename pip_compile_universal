@@ -673,9 +673,7 @@ def pip_compile(versions, compile_args, virtualenvs_dir):
 			line = line.strip()
 			if line.startswith('-c ') or line.startswith('-r '):
 				cmd = line[:2]
-				filename = line[3:]
-				filename = filename.split('#', 1)[0] if '#' in filename else filename
-				filename = filename.strip()
+				filename = line[3:].split('#')[0].strip()
 				with base_dir.joinpath(filename).open() as fp:
 					dependency_contents = fp.read()
 				__, file_extension = os.path.splitext(filename)
